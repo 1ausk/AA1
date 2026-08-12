@@ -9,10 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # مكتبة للتعامل مع طلبات الإنترنت (API)
   http: ^1.1.0
-  # مكتبة لفتح الروابط الخارجية (لأزرار النسخ)
-  url_launcher: ^6.2.0
 
 dev_dependencies:
   flutter_test:
