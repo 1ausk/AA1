@@ -26,6 +26,9 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Create Base Android Structure
+        run: flutter create --platforms=android .
+
       - name: Install Dependencies
         run: flutter pub get
 
