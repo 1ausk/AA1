@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-import 'dart:async';
+import 'package:share_plus/share_plus.dart';
 
 void main() {
   runApp(const MaterialApp(
@@ -25,42 +23,9 @@ class _TranslatorAppState extends State<TranslatorApp> {
   String _extendedDescription = "";
   bool _isLoading = false;
   String _currentMode = 'translate'; // 'translate' or 'extend'
-  late StreamSubscription _intentDataStreamSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    // استقبال النصوص عند مشاركتها والتطبيق مفتوح في الخلفية
-    _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
-      if (value.isNotEmpty) {
-        setState(() {
-          _controller.text = value.first.path;
-        });
-        _processText();
-      }
-    }, onError: (err) {
-      debugPrint("getIntentDataStream error: $err");
-    });
-
-    // استقبال النصوص عند فتح التطبيق لأول مرة عن طريق المشاركة
-    ReceiveSharingIntent.instance.getInitialMedia().then((value) {
-      if (value.isNotEmpty) {
-        setState(() {
-          _controller.text = value.first.path;
-        });
-        _processText();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _intentDataStreamSubscription.cancel();
-    super.dispose();
-  }
 
   Future<void> _processText() async {
-    if (_controller.text.isEmpty) return;
+    if (_controller.text.trim().isEmpty) return;
 
     setState(() {
       _isLoading = true;
@@ -72,16 +37,16 @@ class _TranslatorAppState extends State<TranslatorApp> {
     String prompt = "";
 
     if (_currentMode == 'translate') {
-      prompt = "Translate the following text to fluent and natural Arabic. "
-          "If the text is already in Arabic, improve its phrasing for better flow and clarity. "
-          "Respond *only* with the translated/improved Arabic text:\n\n$sourceText";
+      prompt = "You are a professional translator and linguistic editor. "
+          "Task 1: If the following text is in English or any non-Arabic language, translate it directly into high-quality, fluent, and accurate Arabic. "
+          "Task 2: If the text is already in Arabic, rephrase and refine it to make it more elegant and clear. "
+          "Do NOT add any introduction, explanations, or notes. Output ONLY the resulting Arabic text:\n\n$sourceText";
     } else {
-      prompt = "You are a content expander. Act like a person who deeply understands and is passionate about the subject of the text. "
+      prompt = "You are an expert content analyzer and expander. Act like a person who deeply understands and is passionate about the subject. "
           "Explain the content of the following text very thoroughly, in elaborate, beautiful, and rich Arabic. "
-          "Provide deep context, interesting examples, related interesting facts, and a profound analysis of the meaning and implications. "
-          "Use powerful, emotive, and varied vocabulary. Break the explanation down into multiple clear, logical paragraphs with bold headings for each. "
+          "Provide deep context, clear structure, and insightful details. "
           "Your response must be significantly longer and much more detailed than the input. "
-          "The output must be pure Arabic text, with no other languages or explanations. Start immediately with the extended explanation:\n\n$sourceText";
+          "Start immediately with the extended Arabic explanation without any metadata:\n\n$sourceText";
     }
 
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
@@ -130,10 +95,9 @@ class _TranslatorAppState extends State<TranslatorApp> {
     }
   }
 
-  void _openWithOtherApps(String text) async {
-    final Uri url = Uri.parse("https://www.google.com/search?q=${Uri.encodeComponent(text)}");
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+  void _openWithOtherApps(String text) {
+    if (text.isNotEmpty) {
+      Share.share(text);
     }
   }
 
@@ -157,7 +121,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
                 controller: _controller,
                 maxLines: 5,
                 decoration: InputDecoration(
-                  hintText: 'أدخل النص هنا أو شاركه من تطبيق آخر...',
+                  hintText: 'أدخل النص الإنجليزي أو العربي هنا...',
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
@@ -269,7 +233,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
               ),
               ElevatedButton.icon(
                 onPressed: () => _openWithOtherApps(textToDisplay),
-                icon: const Icon(Icons.open_in_new, size: 18),
+                icon: const Icon(Icons.share, size: 18),
                 label: const Text("فتح باستخدام"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo.shade700,
