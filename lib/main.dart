@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MaterialApp(
@@ -37,15 +38,14 @@ class _TranslatorAppState extends State<TranslatorApp> {
     String prompt = "";
 
     if (_currentMode == 'translate') {
-      prompt = "You are a professional translator and linguistic editor. "
-          "Task 1: If the following text is in English or any non-Arabic language, translate it directly into high-quality, fluent, and accurate Arabic. "
-          "Task 2: If the text is already in Arabic, rephrase and refine it to make it more elegant and clear. "
-          "Do NOT add any introduction, explanations, or notes. Output ONLY the resulting Arabic text:\n\n$sourceText";
+      prompt = "You are a professional translator. "
+          "Translate the following English or foreign text into natural, accurate Arabic. "
+          "If the input is already in Arabic, improve its style and grammar. "
+          "Output ONLY the final Arabic translation without any explanations:\n\n$sourceText";
     } else {
-      prompt = "You are an expert content analyzer and expander. "
-          "Explain the content of the following text thoroughly and in detail, in rich and professional Arabic. "
-          "Provide deep context and clear structure. "
-          "Start immediately with the extended Arabic explanation without any metadata:\n\n$sourceText";
+      prompt = "You are an expert content expander. "
+          "Explain the content of the following text thoroughly in rich Arabic. "
+          "Start immediately with the detailed explanation:\n\n$sourceText";
     }
 
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
@@ -80,12 +80,12 @@ class _TranslatorAppState extends State<TranslatorApp> {
         });
       } else {
         setState(() {
-          _translatedText = "Error: ${response.statusCode}\n${response.body}";
+          _translatedText = "خطأ في الاتصال [${response.statusCode}]: يرجى التأكد من مفتاح API.";
         });
       }
     } catch (e) {
       setState(() {
-        _translatedText = "Error: $e";
+        _translatedText = "حدث خطأ: $e";
       });
     } finally {
       setState(() {
@@ -94,12 +94,22 @@ class _TranslatorAppState extends State<TranslatorApp> {
     }
   }
 
-  void _copyToClipboard(String text) {
-    if (text.isNotEmpty) {
+  Future<void> _openWithExternalApp(String text) async {
+    if (text.isEmpty) return;
+    
+    final Uri googleTranslateUri = Uri.parse(
+      'https://translate.google.com/?sl=auto&tl=ar&text=${Uri.encodeComponent(_controller.text)}&op=translate'
+    );
+
+    if (await canLaunchUrl(googleTranslateUri)) {
+      await launchUrl(googleTranslateUri, mode: LaunchMode.externalApplication);
+    } else {
       Clipboard.setData(ClipboardData(text: text));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم نسخ النص إلى الحافظة!')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم نسخ النص لعدم إمكانية فتح التطبيق الخارجي')),
+        );
+      }
     }
   }
 
@@ -201,10 +211,6 @@ class _TranslatorAppState extends State<TranslatorApp> {
     String textToDisplay = _currentMode == 'translate' ? _translatedText : _extendedDescription;
     String titleText = _currentMode == 'translate' ? 'الترجمة:' : 'الشرح الموسع:';
 
-    if (textToDisplay.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
     return Container(
       padding: const EdgeInsets.all(15.0),
       decoration: BoxDecoration(
@@ -234,9 +240,9 @@ class _TranslatorAppState extends State<TranslatorApp> {
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () => _copyToClipboard(textToDisplay),
-                icon: const Icon(Icons.copy, size: 18),
-                label: const Text("نسخ النص"),
+                onPressed: () => _openWithExternalApp(textToDisplay),
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text("فتح باستخدام"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo.shade700,
                   foregroundColor: Colors.white,
@@ -247,8 +253,12 @@ class _TranslatorAppState extends State<TranslatorApp> {
           const Divider(),
           const SizedBox(height: 10),
           Text(
-            textToDisplay,
-            style: const TextStyle(fontSize: 16.0, color: Colors.black87, height: 1.5),
+            textToDisplay.isEmpty ? "ستظهر النتيجة والترجمة هنا..." : textToDisplay,
+            style: TextStyle(
+              fontSize: 16.0,
+              color: textToDisplay.isEmpty ? Colors.grey : Colors.black87,
+              height: 1.5,
+            ),
           ),
         ],
       ),
