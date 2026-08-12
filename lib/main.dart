@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'dart:async';
 
 void main() {
   runApp(const MaterialApp(
@@ -23,6 +25,39 @@ class _TranslatorAppState extends State<TranslatorApp> {
   String _extendedDescription = "";
   bool _isLoading = false;
   String _currentMode = 'translate'; // 'translate' or 'extend'
+  late StreamSubscription _intentDataStreamSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // استقبال النصوص عند مشاركتها والتطبيق مفتوح في الخلفية
+    _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
+      if (value.isNotEmpty) {
+        setState(() {
+          _controller.text = value.first.path;
+        });
+        _processText();
+      }
+    }, onError: (err) {
+      debugPrint("getIntentDataStream error: $err");
+    });
+
+    // استقبال النصوص عند فتح التطبيق لأول مرة عن طريق المشاركة
+    ReceiveSharingIntent.instance.getInitialMedia().then((value) {
+      if (value.isNotEmpty) {
+        setState(() {
+          _controller.text = value.first.path;
+        });
+        _processText();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _intentDataStreamSubscription.cancel();
+    super.dispose();
+  }
 
   Future<void> _processText() async {
     if (_controller.text.isEmpty) return;
@@ -50,17 +85,13 @@ class _TranslatorAppState extends State<TranslatorApp> {
     }
 
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
-
-    // !!! WARNING: NEVER PUBLISH YOUR REAL API KEY !!!
-    // Replace with your actual key before testing, but NEVER commit it to Git.
-    // Example: const apiKey = 'sk-...';
     const apiKey = 'YOUR_ACTUAL_API_KEY_HERE';
 
     try {
       final response = await http.post(
         url,
         headers: {
-          'Content-Type': 'application/json; charset=utf-8', // Added charset for UTF-8
+          'Content-Type': 'application/json; charset=utf-8',
           'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
@@ -73,7 +104,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes)); // Decode as UTF-8
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         final resultText = data['choices'][0]['message']['content'];
 
         setState(() {
@@ -99,12 +130,11 @@ class _TranslatorAppState extends State<TranslatorApp> {
     }
   }
 
-  void _copyToClipboard(String text) {
-    // This requires clipboard access, which needs extra setup in web.
-    // For app, it works. For now, let's keep it simple.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Content copied to clipboard')),
-    );
+  void _openWithOtherApps(String text) async {
+    final Uri url = Uri.parse("https://www.google.com/search?q=${Uri.encodeComponent(text)}");
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -127,7 +157,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
                 controller: _controller,
                 maxLines: 5,
                 decoration: InputDecoration(
-                  hintText: 'أدخل النص هنا...',
+                  hintText: 'أدخل النص هنا أو شاركه من تطبيق آخر...',
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
@@ -237,13 +267,14 @@ class _TranslatorAppState extends State<TranslatorApp> {
                   color: Colors.indigo.shade900,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.copy),
-                color: Colors.indigo.shade900,
-                onPressed: () {
-                  // Text is available to copy here. Just SnackBar.
-                  _copyToClipboard(textToDisplay);
-                },
+              ElevatedButton.icon(
+                onPressed: () => _openWithOtherApps(textToDisplay),
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text("فتح باستخدام"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo.shade700,
+                  foregroundColor: Colors.white,
+                ),
               ),
             ],
           ),
