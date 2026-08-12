@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:share_plus/share_plus.dart';
 
 void main() {
   runApp(const MaterialApp(
@@ -42,10 +42,9 @@ class _TranslatorAppState extends State<TranslatorApp> {
           "Task 2: If the text is already in Arabic, rephrase and refine it to make it more elegant and clear. "
           "Do NOT add any introduction, explanations, or notes. Output ONLY the resulting Arabic text:\n\n$sourceText";
     } else {
-      prompt = "You are an expert content analyzer and expander. Act like a person who deeply understands and is passionate about the subject. "
-          "Explain the content of the following text very thoroughly, in elaborate, beautiful, and rich Arabic. "
-          "Provide deep context, clear structure, and insightful details. "
-          "Your response must be significantly longer and much more detailed than the input. "
+      prompt = "You are an expert content analyzer and expander. "
+          "Explain the content of the following text thoroughly and in detail, in rich and professional Arabic. "
+          "Provide deep context and clear structure. "
           "Start immediately with the extended Arabic explanation without any metadata:\n\n$sourceText";
     }
 
@@ -95,9 +94,12 @@ class _TranslatorAppState extends State<TranslatorApp> {
     }
   }
 
-  void _openWithOtherApps(String text) {
+  void _copyToClipboard(String text) {
     if (text.isNotEmpty) {
-      Share.share(text);
+      Clipboard.setData(ClipboardData(text: text));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم نسخ النص إلى الحافظة!')),
+      );
     }
   }
 
@@ -232,9 +234,9 @@ class _TranslatorAppState extends State<TranslatorApp> {
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () => _openWithOtherApps(textToDisplay),
-                icon: const Icon(Icons.share, size: 18),
-                label: const Text("فتح باستخدام"),
+                onPressed: () => _copyToClipboard(textToDisplay),
+                icon: const Icon(Icons.copy, size: 18),
+                label: const Text("نسخ النص"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo.shade700,
                   foregroundColor: Colors.white,
