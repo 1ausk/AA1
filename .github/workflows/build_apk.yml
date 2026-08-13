@@ -29,6 +29,11 @@ jobs:
       - name: Create Base Android Project
         run: flutter create --platforms=android --org com.mycompany.translator .
 
+      - name: Inject System Permissions into Manifest
+        run: |
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>\n    <uses-permission android:name="android.permission.ACTION_MANAGE_OVERLAY_PERMISSION"/>\n    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"/>' $MANIFEST_PATH
+
       - name: Install Dependencies
         run: flutter pub get
 
