@@ -26,13 +26,8 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Base Android Structure
-        run: flutter create --platforms=android .
-
-      - name: Inject Permissions into AndroidManifest
-        run: |
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' $MANIFEST_PATH
+      - name: Create Base Android Project
+        run: flutter create --platforms=android --org com.mycompany.translator .
 
       - name: Install Dependencies
         run: flutter pub get
