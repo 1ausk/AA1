@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
 void main() {
   runApp(const MaterialApp(
@@ -25,8 +25,15 @@ class _TranslatorAppState extends State<TranslatorApp> {
   bool _isLoading = false;
   String _currentMode = 'translate'; // 'translate' or 'extend'
 
+  // أدخل مفتاح OpenAI الخاص بك هنا
+  final String _apiKey = 'YOUR_ACTUAL_API_KEY_HERE';
+
   Future<void> _processText() async {
-    if (_controller.text.trim().isEmpty) return;
+    final input = _controller.text.trim();
+    if (input.isEmpty) {
+      _showSnackBar('يرجى إدخال نص أولاً');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -34,29 +41,28 @@ class _TranslatorAppState extends State<TranslatorApp> {
       _extendedDescription = "";
     });
 
-    final sourceText = _controller.text;
     String prompt = "";
 
     if (_currentMode == 'translate') {
-      prompt = "You are a professional translator. "
-          "Translate the following English or foreign text into natural, accurate Arabic. "
-          "If the input is already in Arabic, improve its style and grammar. "
-          "Output ONLY the final Arabic translation without any explanations:\n\n$sourceText";
+      prompt = "You are an expert translator and editor. "
+          "Task: If the following text is in English or any non-Arabic language, translate it directly into fluent, natural, and highly accurate Arabic. "
+          "If the text is already in Arabic, enhance its style, grammar, and flow. "
+          "Do NOT add any preamble, intro, or explanations. Respond ONLY with the finalized Arabic text:\n\n$input";
     } else {
-      prompt = "You are an expert content expander. "
-          "Explain the content of the following text thoroughly in rich Arabic. "
-          "Start immediately with the detailed explanation:\n\n$sourceText";
+      prompt = "You are an expert content expander and writer. "
+          "Task: Explain the following text thoroughly in rich, structured, and beautiful Arabic. "
+          "Provide detailed context, key takeaways, and clear paragraphs with headings. "
+          "Start immediately with the extended Arabic content without meta commentary:\n\n$input";
     }
 
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
-    const apiKey = 'YOUR_ACTUAL_API_KEY_HERE';
 
     try {
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Bearer $apiKey',
+          'Authorization': 'Bearer $_apiKey',
         },
         body: jsonEncode({
           'model': 'gpt-3.5-turbo-0125',
@@ -69,7 +75,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final resultText = data['choices'][0]['message']['content'];
+        final resultText = data['choices'][0]['message']['content'].toString().trim();
 
         setState(() {
           if (_currentMode == 'translate') {
@@ -80,12 +86,12 @@ class _TranslatorAppState extends State<TranslatorApp> {
         });
       } else {
         setState(() {
-          _translatedText = "خطأ في الاتصال [${response.statusCode}]: يرجى التأكد من مفتاح API.";
+          _translatedText = "خطأ في الاستجابة (${response.statusCode}):\nتأكد من صحة مفتاح الـ API والرصيد المتاح.";
         });
       }
     } catch (e) {
       setState(() {
-        _translatedText = "حدث خطأ: $e";
+        _translatedText = "تعذر الاتصال بالشبكة.\nيرجى التأكد من اتصال الجهاز بالإنترنت والتحقق مجدداً.\nالتفاصيل: $e";
       });
     } finally {
       setState(() {
@@ -94,112 +100,173 @@ class _TranslatorAppState extends State<TranslatorApp> {
     }
   }
 
-  Future<void> _openWithExternalApp(String text) async {
-    if (text.isEmpty) return;
-    
-    final Uri googleTranslateUri = Uri.parse(
-      'https://translate.google.com/?sl=auto&tl=ar&text=${Uri.encodeComponent(_controller.text)}&op=translate'
-    );
+  void _shareResult(String text) {
+    if (text.trim().isEmpty) return;
+    Share.share(text, subject: 'النتيجة من تطبيق المترجم والمحلل');
+  }
 
-    if (await canLaunchUrl(googleTranslateUri)) {
-      await launchUrl(googleTranslateUri, mode: LaunchMode.externalApplication);
-    } else {
-      Clipboard.setData(ClipboardData(text: text));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم نسخ النص لعدم إمكانية فتح التطبيق الخارجي')),
-        );
-      }
-    }
+  void _copyToClipboard(String text) {
+    if (text.trim().isEmpty) return;
+    Clipboard.setData(ClipboardData(text: text));
+    _showSnackBar('تم نسخ النص إلى الحافظة بنجاح');
+  }
+
+  void _clearInput() {
+    _controller.clear();
+    setState(() {
+      _translatedText = "";
+      _extendedDescription = "";
+    });
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontFamily: 'sans-serif')),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('المترجم والمحلل'),
+        title: const Text('المترجم والمحلل الذكي'),
+        centerTitle: true,
         backgroundColor: Colors.indigo.shade900,
         foregroundColor: Colors.white,
+        elevation: 2,
       ),
       backgroundColor: Colors.grey.shade100,
       body: Directionality(
         textDirection: TextDirection.rtl,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                controller: _controller,
-                maxLines: 5,
-                decoration: InputDecoration(
-                  hintText: 'أدخل النص الإنجليزي أو العربي هنا...',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15.0),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.all(15.0),
+              // مربع إدخال النص
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15.0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    )
+                  ],
                 ),
-                style: const TextStyle(fontSize: 16.0, color: Colors.black),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _controller,
+                      maxLines: 5,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'أدخل النص الإنجليزي أو العربي هنا...',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(15.0),
+                        suffixIcon: _controller.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: Colors.grey),
+                                onPressed: _clearInput,
+                              )
+                            : null,
+                      ),
+                      style: const TextStyle(fontSize: 16.0, color: Colors.black87),
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'عدد الحروف: ${_controller.text.length}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                          Text(
+                            'عدد الكلمات: ${_controller.text.trim().isEmpty ? 0 : _controller.text.trim().split(RegExp(r'\s+')).length}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 15),
+
+              // خيارات الوضع (ترجمة أو شرح)
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  ChoiceChip(
-                    label: const Text('ترجمة / تحسين', style: TextStyle(color: Colors.white)),
-                    selected: _currentMode == 'translate',
-                    selectedColor: Colors.indigo.shade900,
-                    backgroundColor: Colors.grey.shade400,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _currentMode = 'translate';
-                        });
-                      }
-                    },
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Center(child: Text('ترجمة / تحسين')),
+                      selected: _currentMode == 'translate',
+                      selectedColor: Colors.indigo.shade900,
+                      labelStyle: TextStyle(
+                        color: _currentMode == 'translate' ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      backgroundColor: Colors.grey.shade200,
+                      onSelected: (selected) {
+                        if (selected) setState(() => _currentMode = 'translate');
+                      },
+                    ),
                   ),
-                  ChoiceChip(
-                    label: const Text('شرح / توسيع', style: TextStyle(color: Colors.white)),
-                    selected: _currentMode == 'extend',
-                    selectedColor: Colors.indigo.shade900,
-                    backgroundColor: Colors.grey.shade400,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _currentMode = 'extend';
-                        });
-                      }
-                    },
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ChoiceChip(
+                      label: const Center(child: Text('شرح / توسيع')),
+                      selected: _currentMode == 'extend',
+                      selectedColor: Colors.indigo.shade900,
+                      labelStyle: TextStyle(
+                        color: _currentMode == 'extend' ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      backgroundColor: Colors.grey.shade200,
+                      onSelected: (selected) {
+                        if (selected) setState(() => _currentMode = 'extend');
+                      },
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 15),
+
+              // زر البدء
               ElevatedButton(
                 onPressed: _isLoading ? null : _processText,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo.shade900,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 15.0),
+                  padding: const EdgeInsets.symmetric(vertical: 14.0),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15.0),
+                    borderRadius: BorderRadius.circular(12.0),
                   ),
                 ),
                 child: _isLoading
                     ? const SizedBox(
-                        height: 20,
-                        width: 20,
+                        height: 22,
+                        width: 22,
                         child: CircularProgressIndicator(
                           color: Colors.white,
-                          strokeWidth: 2,
+                          strokeWidth: 2.5,
                         ),
                       )
-                    : Text(_currentMode == 'translate' ? 'ابدأ الترجمة' : 'ابدأ الشرح'),
+                    : Text(
+                        _currentMode == 'translate' ? 'ابدأ الترجمة' : 'ابدأ الشرح والتوسيع',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
               ),
-              const SizedBox(height: 25),
-              _buildResultArea(),
+              const SizedBox(height: 20),
+
+              // منطقة عرض النتائج والأزرار
+              _buildResultCard(),
             ],
           ),
         ),
@@ -207,20 +274,19 @@ class _TranslatorAppState extends State<TranslatorApp> {
     );
   }
 
-  Widget _buildResultArea() {
+  Widget _buildResultCard() {
     String textToDisplay = _currentMode == 'translate' ? _translatedText : _extendedDescription;
-    String titleText = _currentMode == 'translate' ? 'الترجمة:' : 'الشرح الموسع:';
+    String titleText = _currentMode == 'translate' ? 'الترجمة الناتج:' : 'الشرح الموسع:';
 
     return Container(
-      padding: const EdgeInsets.all(15.0),
+      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.3),
-            spreadRadius: 2,
-            blurRadius: 5,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
             offset: const Offset(0, 3),
           ),
         ],
@@ -234,30 +300,42 @@ class _TranslatorAppState extends State<TranslatorApp> {
               Text(
                 titleText,
                 style: TextStyle(
-                  fontSize: 18.0,
+                  fontSize: 17.0,
                   fontWeight: FontWeight.bold,
                   color: Colors.indigo.shade900,
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: () => _openWithExternalApp(textToDisplay),
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text("فتح باستخدام"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo.shade700,
-                  foregroundColor: Colors.white,
+              if (textToDisplay.isNotEmpty)
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 20),
+                      tooltip: 'نسخ',
+                      onPressed: () => _copyToClipboard(textToDisplay),
+                      color: Colors.indigo.shade900,
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => _shareResult(textToDisplay),
+                      icon: const Icon(Icons.share, size: 16),
+                      label: const Text("فتح باستخدام"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo.shade800,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
             ],
           ),
-          const Divider(),
-          const SizedBox(height: 10),
+          const Divider(height: 20),
           Text(
-            textToDisplay.isEmpty ? "ستظهر النتيجة والترجمة هنا..." : textToDisplay,
+            textToDisplay.isEmpty ? "ستظهر نتيجة الترجمة أو الشرح هنا بعد الضغط على الزر..." : textToDisplay,
             style: TextStyle(
-              fontSize: 16.0,
-              color: textToDisplay.isEmpty ? Colors.grey : Colors.black87,
-              height: 1.5,
+              fontSize: 15.0,
+              color: textToDisplay.isEmpty ? Colors.grey.shade500 : Colors.black87,
+              height: 1.6,
             ),
           ),
         ],
