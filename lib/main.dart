@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
 void main() {
   runApp(const MaterialApp(
@@ -25,6 +25,11 @@ class _TranslatorAppState extends State<TranslatorApp> {
   bool _isLoading = false;
   String _currentMode = 'translate'; // 'translate' or 'extend'
 
+  // خيارات التحكم بحجم الخط والألوان
+  double _fontSize = 16.0;
+  Color _textColor = Colors.black87;
+  Color _resultCardColor = Colors.white;
+
   // ضع مفتاح OpenAI الخاص بك هنا
   final String _apiKey = 'YOUR_ACTUAL_API_KEY_HERE';
 
@@ -44,15 +49,16 @@ class _TranslatorAppState extends State<TranslatorApp> {
     String prompt = "";
 
     if (_currentMode == 'translate') {
-      prompt = "You are an expert translator. "
-          "Task: Translate the following English or foreign text into accurate and fluent Arabic. "
-          "If it is already in Arabic, improve its grammar and phrasing. "
-          "Respond ONLY with the final result without any extra talk:\n\n$input";
+      prompt = "You are an advanced linguistic assistant and translator. "
+          "Task 1: Pre-process the following text. Fix any typos, separated letters, or merged/run-on words. "
+          "Task 2: Translate the cleaned text into high-quality Arabic. "
+          "Task 3: Present the translation clearly, ideally mapping the Arabic translation alongside or above the original English terms so it does not overlap contextually. "
+          "Do NOT add any intro, preamble, or meta explanations. Output ONLY the polished Arabic translation:\n\n$input";
     } else {
-      prompt = "You are an expert content expander. "
-          "Task: Explain the following text thoroughly in rich Arabic. "
-          "Provide context and clear breakdown. "
-          "Respond ONLY with the detailed Arabic explanation:\n\n$input";
+      prompt = "You are an expert content analyzer. "
+          "Task 1: Correct any typos, broken character encoding, or merged words in the following text. "
+          "Task 2: Provide a comprehensive, structured, and deep explanation of the text in clear Arabic. "
+          "Start immediately with the extended explanation without intro comments:\n\n$input";
     }
 
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
@@ -69,7 +75,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
           'messages': [
             {'role': 'user', 'content': prompt}
           ],
-          'temperature': 0.7,
+          'temperature': 0.5,
         }),
       );
 
@@ -86,12 +92,12 @@ class _TranslatorAppState extends State<TranslatorApp> {
         });
       } else {
         setState(() {
-          _translatedText = "خطأ في الاتصال [رمز ${response.statusCode}]: تحقق من مفتاح الـ API والرصيد.";
+          _translatedText = "خطأ في الاستجابة (${response.statusCode}): يرجى التأكد من مفتاح الـ API والاتصال.";
         });
       }
     } catch (e) {
       setState(() {
-        _translatedText = "تعذر الاتصال بالمكونات. التفاصيل: $e";
+        _translatedText = "حدث خطأ أثناء الاتصال بالشبكة: $e";
       });
     } finally {
       setState(() {
@@ -100,28 +106,13 @@ class _TranslatorAppState extends State<TranslatorApp> {
     }
   }
 
-  Future<void> _openWithExternalApp() async {
-    final textToOpen = _controller.text.trim();
-    if (textToOpen.isEmpty) {
-      _showSnackBar('أدخل نصاً أولاً لفتحه');
+  void _shareAppOrText(String text) {
+    final textToShare = text.trim().isNotEmpty ? text : _controller.text.trim();
+    if (textToShare.isEmpty) {
+      _showSnackBar('لا يوجد نص لمشاركته أو تعريبه');
       return;
     }
-
-    final Uri googleTranslateUri = Uri.parse(
-      'https://translate.google.com/?sl=auto&tl=ar&text=${Uri.encodeComponent(textToOpen)}&op=translate'
-    );
-
-    try {
-      bool launched = await launchUrl(
-        googleTranslateUri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched) {
-        _copyToClipboard(textToOpen);
-      }
-    } catch (e) {
-      _copyToClipboard(textToOpen);
-    }
+    Share.share(textToShare, subject: 'تعريب وترجمة النص');
   }
 
   void _copyToClipboard(String text) {
@@ -151,7 +142,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('المترجم والمحلل'),
+        title: const Text('المترجم والمحلل الذكي'),
         centerTitle: true,
         backgroundColor: Colors.indigo.shade900,
         foregroundColor: Colors.white,
@@ -165,6 +156,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // مربع إدخال النص
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -218,6 +210,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
               ),
               const SizedBox(height: 15),
 
+              // اختيار الوضع (ترجمة / شرح)
               Row(
                 children: [
                   Expanded(
@@ -255,6 +248,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
               ),
               const SizedBox(height: 15),
 
+              // زر بدء العملية
               ElevatedButton(
                 onPressed: _isLoading ? null : _processText,
                 style: ElevatedButton.styleFrom(
@@ -279,8 +273,91 @@ class _TranslatorAppState extends State<TranslatorApp> {
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
 
+              // شريط أدوات التحكم (تكبير/تصغير الخط - تغيير الألوان - تعريب التطبيق)
+              Card(
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // أزرار تكبير وتصغير النص
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline, color: Colors.indigo),
+                            tooltip: 'تكبير النص',
+                            onPressed: () {
+                              setState(() {
+                                if (_fontSize < 30) _fontSize += 2;
+                              });
+                            },
+                          ),
+                          Text('${_fontSize.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.indigo),
+                            tooltip: 'تصغير النص',
+                            onPressed: () {
+                              setState(() {
+                                if (_fontSize > 12) _fontSize -= 2;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 5),
+
+                      // زر تغيير لون النص والكرت
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.color_lens, color: Colors.indigo),
+                        tooltip: 'تغيير الألوان',
+                        onSelected: (value) {
+                          setState(() {
+                            if (value == 'blue') {
+                              _textColor = Colors.blue.shade900;
+                              _resultCardColor = Colors.blue.shade50;
+                            } else if (value == 'green') {
+                              _textColor = Colors.green.shade900;
+                              _resultCardColor = Colors.green.shade50;
+                            } else if (value == 'dark') {
+                              _textColor = Colors.amber;
+                              _resultCardColor = Colors.grey.shade900;
+                            } else {
+                              _textColor = Colors.black87;
+                              _resultCardColor = Colors.white;
+                            }
+                          });
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'default', child: Text('الافتراضي')),
+                          const PopupMenuItem(value: 'blue', child: Text('أزرق')),
+                          const PopupMenuItem(value: 'green', child: Text('أخضر')),
+                          const PopupMenuItem(value: 'dark', child: Text('داكن')),
+                        ],
+                      ),
+
+                      // زر تعريب التطبيق / المشاركة
+                      ElevatedButton.icon(
+                        onPressed: () => _shareAppOrText(_currentMode == 'translate' ? _translatedText : _extendedDescription),
+                        icon: const Icon(Icons.translate, size: 16),
+                        label: const Text("تعريب التطبيق"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo.shade800,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 15),
+
+              // منطقة إظهار النتائج
               _buildResultCard(),
             ],
           ),
@@ -296,7 +373,7 @@ class _TranslatorAppState extends State<TranslatorApp> {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _resultCardColor,
         borderRadius: BorderRadius.circular(15.0),
         boxShadow: [
           BoxShadow(
@@ -325,19 +402,19 @@ class _TranslatorAppState extends State<TranslatorApp> {
                   if (textToDisplay.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.copy, size: 20),
-                      tooltip: 'نسخ',
+                      tooltip: 'نسخ النص',
                       onPressed: () => _copyToClipboard(textToDisplay),
                       color: Colors.indigo.shade900,
                     ),
                   ElevatedButton.icon(
-                    onPressed: _openWithExternalApp,
+                    onPressed: () => _shareAppOrText(textToDisplay),
                     icon: const Icon(Icons.open_in_new, size: 16),
                     label: const Text("فتح باستخدام"),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.indigo.shade800,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      textStyle: const TextStyle(fontSize: 13),
+                      textStyle: const TextStyle(fontSize: 12),
                     ),
                   ),
                 ],
@@ -348,8 +425,8 @@ class _TranslatorAppState extends State<TranslatorApp> {
           Text(
             textToDisplay.isEmpty ? "ستظهر نتيجة الترجمة أو الشرح هنا..." : textToDisplay,
             style: TextStyle(
-              fontSize: 15.0,
-              color: textToDisplay.isEmpty ? Colors.grey.shade500 : Colors.black87,
+              fontSize: _fontSize,
+              color: textToDisplay.isEmpty ? Colors.grey.shade500 : _textColor,
               height: 1.6,
             ),
           ),
